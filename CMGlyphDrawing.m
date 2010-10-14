@@ -51,11 +51,11 @@ void CMCMapRelease(CMCMap4Ref cmap);
 
 
 void CMFontGetGlyphsForUnichars(CGFontRef cgFont, const UniChar buffer[], CGGlyph glyphs[], size_t numGlyphs) {
-	
-	CMCMap4Ref cmap = CMGetCMapForFont(cgFont);
-	for (int i = 0; i < numGlyphs; i++) {
-		glyphs[i] = CMCMapGetGlyphIndexForUnichar(cmap, buffer[i]);
-	}
+    
+    CMCMap4Ref cmap = CMGetCMapForFont(cgFont);
+    for (int i = 0; i < numGlyphs; i++) {
+        glyphs[i] = CMCMapGetGlyphIndexForUnichar(cmap, buffer[i]);
+    }
 }
 
 
@@ -119,30 +119,40 @@ CMCMap4Ref CMGetCMapForFont(CGFontRef cgFont) {
     return NULL;
 }
 
+
+inline static CGGlyph CMCMapGetGlyphIndexForUnicharInRange(CMCMap4Ref cmap, UniChar c, const int begin, const int end) {
+  if (begin != end)
+  {
+    const int center = (begin+end) >> 1;
+    const UInt16 endChar = getUInt16(cmap->endCode, center);
+    if (endChar >= c) { // In a first half
+      return CMCMapGetGlyphIndexForUnicharInRange(cmap, c, begin, center);
+    } else if (center != begin) { // In a second half
+      return CMCMapGetGlyphIndexForUnicharInRange(cmap, c, center, end);
+    }
+  }
+  
+  const int i = end;
+  const UInt16 start = getUInt16(cmap->startCode, i);
+  if (start <= c) {
+      const UInt16 delta = getUInt16(cmap->idDelta, i);
+      const UInt16 rangeOffset = getUInt16(cmap->idRangeOffset, i);
+      if(rangeOffset == 0) {
+          return delta + c;
+      } else {
+          //                                       rangeOffset / 2
+          return getUInt16(cmap->glyphIndexArray, (rangeOffset >> 1) + (c - start) - (cmap->segCount - i));
+      }
+  }
+  
+  // Epic fail.
+  return 0;
+}
+
 CGGlyph CMCMapGetGlyphIndexForUnichar(CMCMap4Ref cmap, UniChar c) {
-	// TODO: Binary search?
-	for (int i = 0; i < cmap->segCount; i++) {
-		// Find first endcode greater or equal to the char code
-		UInt16 end = getUInt16(cmap->endCode, i);
-		if (end >= c) {
-			UInt16 start = getUInt16(cmap->startCode, i);
-			if (start <= c) {
-				UInt16 delta = getUInt16(cmap->idDelta, i);
-				UInt16 rangeOffset = getUInt16(cmap->idRangeOffset, i);
-				if(rangeOffset == 0) {
-					return delta + c;
-				} else {
-					//                                       rangeOffset / 2
-					return getUInt16(cmap->glyphIndexArray, (rangeOffset >> 1) + (c - start) - (cmap->segCount - i));
-				}
-			} else {
-				// our code is not within one of this font's segments
-				return 0;
-			}
-		}
-	}
-	// Epic fail.
-	return 0;
+    const int begin = 0;
+    const int end = cmap->segCount - 1;
+    return CMCMapGetGlyphIndexForUnicharInRange(cmap, c, begin, end);
 }
 
 CMCMap4Ref CMCMapCreate(CFDataRef fontTable, UInt32 segmentOffset) {
@@ -184,3 +194,4 @@ void CMCMapRelease(CMCMap4Ref cmap) {
 	// Release struct
 	free(cmap);
 }
+

@@ -120,18 +120,23 @@ CMCMap4Ref CMGetCMapForFont(CGFontRef cgFont) {
 }
 
 
-inline static CGGlyph CMCMapGetGlyphIndexForUnicharInRange(CMCMap4Ref cmap, UniChar c, const int begin, const int end) {
-  if (begin != end)
+CGGlyph CMCMapGetGlyphIndexForUnichar(CMCMap4Ref cmap, UniChar c) {
+  int begin = 0;
+  int end = cmap->segCount-1;
+  while (begin != end)
   {
     const int center = (begin+end) >> 1;
     const UInt16 endChar = getUInt16(cmap->endCode, center);
     if (endChar >= c) { // In a first half
-      return CMCMapGetGlyphIndexForUnicharInRange(cmap, c, begin, center);
+      end = center;
+      continue;
     } else if (center != begin) { // In a second half
-      return CMCMapGetGlyphIndexForUnicharInRange(cmap, c, center, end);
+      begin = center;
+      continue;
+    } else {
+      break;
     }
   }
-  
   const int i = end;
   const UInt16 start = getUInt16(cmap->startCode, i);
   if (start <= c) {
@@ -147,12 +152,6 @@ inline static CGGlyph CMCMapGetGlyphIndexForUnicharInRange(CMCMap4Ref cmap, UniC
   
   // Epic fail.
   return 0;
-}
-
-CGGlyph CMCMapGetGlyphIndexForUnichar(CMCMap4Ref cmap, UniChar c) {
-    const int begin = 0;
-    const int end = cmap->segCount - 1;
-    return CMCMapGetGlyphIndexForUnicharInRange(cmap, c, begin, end);
 }
 
 CMCMap4Ref CMCMapCreate(CFDataRef fontTable, UInt32 segmentOffset) {
